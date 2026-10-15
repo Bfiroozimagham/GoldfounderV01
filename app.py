@@ -17,10 +17,10 @@ if os.path.exists(ZIP_PATH) and not os.path.exists(DB_PATH):
     with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
         zip_ref.extractall(".")
 
-# ایجاد ۳ تب برای داشبورد، افزودن متغیر و مدیریت/حذف
+# ایجاد ۳ تب برای داشبورد، افزودن هوشمند متغیر و مدیریت/حذف
 tab1, tab2, tab3 = st.tabs([
     "📊 داشبورد و نمودارها", 
-    "➕ افزودن متغیر جدید (عامل)", 
+    "➕ افزودن هوشمند متغیر (عامل)", 
     "⚙️ مدیریت و حذف متغیرها"
 ])
 
@@ -80,47 +80,91 @@ with tab1:
         st.warning("⚠️ فایل دیتابیس یافت نشد.")
 
 # ==========================================
-# تب دوم: افزودن متغیر جدید (مشابه سلول 17)
+# تب دوم: افزودن هوشمند متغیر (مشابه سبک جستجو و پیشنهاد)
 # ==========================================
 with tab2:
-    st.subheader("➕ ثبت متغیر (عامل) جدید در سامانه")
-    st.markdown("مشخصات متغیر جدید را وارد کنید تا به جدول `series_registry` اضافه شود.")
+    st.subheader("🔎 جستجو و افزودن هوشمند عامل (Series)")
+    st.markdown("نام یا کلیدواژه انگلیسی عامل مورد نظر را وارد کنید تا پیشنهادات استاندارد یا ثبت مستقیم نمایش داده شود.")
     
-    with st.form("add_series_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            new_code = st.text_input("کد متغیر (Series Code)", placeholder="مثال: FRED:GDPC1 یا YAHOO:GC=F")
-            new_freq = st.selectbox("فرکانس داده (Frequency)", ["Daily", "Weekly", "Monthly", "Quarterly", "Annual"])
-        with col2:
-            new_title = st.text_input("عنوان توضیحی (Title)", placeholder="مثال: U.S. Real GDP یا Gold Spot Price")
-            new_status = st.selectbox("وضعیت (Status)", ["ACTIVE", "INACTIVE"])
-            
-        submitted = st.form_submit_button("💾 ثبت متغیر جدید")
+    # بانک پیشنهادات پیش‌فرض رایج (مانند الگوهای یاهو و فرید)
+    suggested_database = [
+        {"code": "GOLDPRICE:GOLD", "title": "Gold Historical Daily Price", "frequency": "Daily"},
+        {"code": "GOLDPRICE:SILVER", "title": "Silver Historical Daily Price", "frequency": "Daily"},
+        {"code": "YAHOO:GC=F", "title": "Gold Futures", "frequency": "Daily"},
+        {"code": "YAHOO:SI=F", "title": "Silver Futures", "frequency": "Daily"},
+        {"code": "YAHOO:NQ=F", "title": "Nasdaq 100 Futures", "frequency": "Daily"},
+        {"code": "YAHOO:^GSPC", "title": "S&P 500 Index", "frequency": "Daily"},
+        {"code": "YAHOO:BNO", "title": "United States Brent Oil Fund", "frequency": "Daily"},
+        {"code": "FRED:UNRATE", "title": "Unemployment Rate", "frequency": "Monthly"},
+        {"code": "FRED:CPIAUCSL", "title": "Consumer Price Index (CPI)", "frequency": "Monthly"},
+        {"code": "FRED:T10YIE", "title": "10-Year Breakeven Inflation Rate", "frequency": "Daily"}
+    ]
+
+    search_query = st.text_input("جستجوی عامل (به انگلیسی):", placeholder="مثلا Gold, Oil, CPI, S&P ...").strip().lower()
+
+    if search_query:
+        # فیلتر کردن پیشنهادات بر اساس جستجوی کاربر
+        matches = [s for s in suggested_database if search_query in s['code'].lower() or search_query in s['title'].lower()]
         
-        if submitted:
-            if not new_code or not new_title:
-                st.error("❌ لطفاً کد متغیر و عنوان را به طور کامل پر کنید.")
+        if matches:
+            st.write(f"📌 **{len(matches)} پیشنهاد یافت شد:**")
+            for idx, match in enumerate(matches):
+                col_a, col_b = st.columns([4, 1])
+                with col_a:
+                    st.info(f"**{match['code']}** — {match['title']} ({match['frequency']})")
+                with col_b:
+                    if st.button("افزودن", key=f"add_match_{idx}"):
+                        try:
+                            conn = sqlite3.connect(DB_PATH)
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT id FROM series_registry WHERE series_code = ?", (match['code'],))
+                            if cursor.fetchone():
+                                st.warning("⚠️ این متغیر از پیش در دیتابیس وجود دارد.")
+                            else:
+                                cursor.execute("""
+                                    INSERT INTO series_registry (series_code, title, frequency, status)
+                                    VALUES (?, ?, ?, 'ACTIVE')
+                                """, (match['code'], match['title'], match['frequency']))
+                                conn.commit()
+                                st.success(f"✅ عامل {match['code']} با موفقیت اضافه شد!")
+                            conn.close()
+                        except Exception as e:
+                            st.error(f"خطا: {e}")
+        else:
+            st.warning("موردی در پیشنهادات پیش‌فرض پیدا نشد. می‌توانید از طریق فرم سفارشی زیر عامل دلخواه خود را ثبت کنید.")
+
+    st.markdown("---")
+    st.write("### ✍️ ثبت سفارشی و دستی عامل جدید")
+    with st.form("custom_add_form"):
+        c1, c2 = st.columns(2)
+        with c1:
+            custom_code = st.text_input("کد دقیق (Series Code)", placeholder="مثلا YAHOO:CL=F")
+            custom_freq = st.selectbox("فرکانس", ["Daily", "Weekly", "Monthly", "Quarterly", "Annual"])
+        with c2:
+            custom_title = st.text_input("عنوان توضیحی (Title)", placeholder="مثلا Crude Oil Futures")
+            custom_status = st.selectbox("وضعیت اولیه", ["ACTIVE", "INACTIVE"])
+            
+        custom_submitted = st.form_submit_button("💾 ثبت عامل سفارشی")
+        if custom_submitted:
+            if not custom_code or not custom_title:
+                st.error("لطفاً کد و عنوان را کامل وارد کنید.")
             else:
                 try:
                     conn = sqlite3.connect(DB_PATH)
                     cursor = conn.cursor()
-                    
-                    # بررسی تکراری نبودن کد متغیر
-                    cursor.execute("SELECT id FROM series_registry WHERE series_code = ?", (new_code,))
-                    existing = cursor.fetchone()
-                    
-                    if existing:
-                        st.warning(f"⚠️ این کد متغیر پیشتر با شناسه [{existing[0]}] ثبت شده است.")
+                    cursor.execute("SELECT id FROM series_registry WHERE series_code = ?", (custom_code,))
+                    if cursor.fetchone():
+                        st.warning("⚠️ این کد پیش‌تر ثبت شده است.")
                     else:
                         cursor.execute("""
                             INSERT INTO series_registry (series_code, title, frequency, status)
                             VALUES (?, ?, ?, ?)
-                        """, (new_code, new_title, new_freq, new_status))
+                        """, (custom_code, custom_title, custom_freq, custom_status))
                         conn.commit()
-                        st.success(f"✅ متغیر جدید با کد **{new_code}** با موفقیت به پایگاه داده اضافه شد!")
+                        st.success(f"✅ عامل سفارشی {custom_code} با موفقیت ثبت شد!")
                     conn.close()
                 except Exception as e:
-                    st.error(f"❌ خطا در ثبت متغیر: {e}")
+                    st.error(f"خطا: {e}")
 
 # ==========================================
 # تب سوم: پنل مدیریت و حذف متغیرها
@@ -156,6 +200,7 @@ with tab3:
                         
                         cursor.execute("DELETE FROM standardized_observation_inputs WHERE standardized_observation_id IN (SELECT id FROM standardized_observations WHERE series_id = ?)", (sid,))
                         cursor.execute("DELETE FROM standardized_observations WHERE series_id = ?", (sid,))
+                        cursor.execute("DELETE_RAW",) # (handled via standard sql below)
                         cursor.execute("DELETE FROM raw_observation_runs WHERE raw_observation_id IN (SELECT id FROM raw_observations WHERE series_id = ?)", (sid,))
                         cursor.execute("DELETE FROM raw_observations WHERE series_id = ?", (sid,))
                         cursor.execute("DELETE FROM collection_run_series WHERE series_id = ?", (sid,))
