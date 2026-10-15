@@ -80,30 +80,28 @@ with tab1:
         st.warning("⚠️ فایل دیتابیس یافت نشد.")
 
 # ==========================================
-# تب دوم: افزودن هوشمند متغیر (مشابه سبک جستجو و پیشنهاد)
+# تب دوم: افزودن هوشمند متغیر (با در نظر گرفتن source_id)
 # ==========================================
 with tab2:
     st.subheader("🔎 جستجو و افزودن هوشمند عامل (Series)")
     st.markdown("نام یا کلیدواژه انگلیسی عامل مورد نظر را وارد کنید تا پیشنهادات استاندارد یا ثبت مستقیم نمایش داده شود.")
     
-    # بانک پیشنهادات پیش‌فرض رایج (مانند الگوهای یاهو و فرید)
     suggested_database = [
-        {"code": "GOLDPRICE:GOLD", "title": "Gold Historical Daily Price", "frequency": "Daily"},
-        {"code": "GOLDPRICE:SILVER", "title": "Silver Historical Daily Price", "frequency": "Daily"},
-        {"code": "YAHOO:GC=F", "title": "Gold Futures", "frequency": "Daily"},
-        {"code": "YAHOO:SI=F", "title": "Silver Futures", "frequency": "Daily"},
-        {"code": "YAHOO:NQ=F", "title": "Nasdaq 100 Futures", "frequency": "Daily"},
-        {"code": "YAHOO:^GSPC", "title": "S&P 500 Index", "frequency": "Daily"},
-        {"code": "YAHOO:BNO", "title": "United States Brent Oil Fund", "frequency": "Daily"},
-        {"code": "FRED:UNRATE", "title": "Unemployment Rate", "frequency": "Monthly"},
-        {"code": "FRED:CPIAUCSL", "title": "Consumer Price Index (CPI)", "frequency": "Monthly"},
-        {"code": "FRED:T10YIE", "title": "10-Year Breakeven Inflation Rate", "frequency": "Daily"}
+        {"code": "GOLDPRICE:GOLD", "title": "Gold Historical Daily Price", "frequency": "Daily", "source_id": 1},
+        {"code": "GOLDPRICE:SILVER", "title": "Silver Historical Daily Price", "frequency": "Daily", "source_id": 1},
+        {"code": "YAHOO:GC=F", "title": "Gold Futures", "frequency": "Daily", "source_id": 2},
+        {"code": "YAHOO:SI=F", "title": "Silver Futures", "frequency": "Daily", "source_id": 2},
+        {"code": "YAHOO:NQ=F", "title": "Nasdaq 100 Futures", "frequency": "Daily", "source_id": 2},
+        {"code": "YAHOO:^GSPC", "title": "S&P 500 Index", "frequency": "Daily", "source_id": 2},
+        {"code": "YAHOO:BNO", "title": "United States Brent Oil Fund", "frequency": "Daily", "source_id": 2},
+        {"code": "FRED:UNRATE", "title": "Unemployment Rate", "frequency": "Monthly", "source_id": 3},
+        {"code": "FRED:CPIAUCSL", "title": "Consumer Price Index (CPI)", "frequency": "Monthly", "source_id": 3},
+        {"code": "FRED:T10YIE", "title": "10-Year Breakeven Inflation Rate", "frequency": "Daily", "source_id": 3}
     ]
 
     search_query = st.text_input("جستجوی عامل (به انگلیسی):", placeholder="مثلا Gold, Oil, CPI, S&P ...").strip().lower()
 
     if search_query:
-        # فیلتر کردن پیشنهادات بر اساس جستجوی کاربر
         matches = [s for s in suggested_database if search_query in s['code'].lower() or search_query in s['title'].lower()]
         
         if matches:
@@ -122,16 +120,16 @@ with tab2:
                                 st.warning("⚠️ این متغیر از پیش در دیتابیس وجود دارد.")
                             else:
                                 cursor.execute("""
-                                    INSERT INTO series_registry (series_code, title, frequency, status)
-                                    VALUES (?, ?, ?, 'ACTIVE')
-                                """, (match['code'], match['title'], match['frequency']))
+                                    INSERT INTO series_registry (series_code, title, frequency, status, source_id)
+                                    VALUES (?, ?, ?, 'ACTIVE', ?)
+                                """, (match['code'], match['title'], match['frequency'], match['source_id']))
                                 conn.commit()
                                 st.success(f"✅ عامل {match['code']} با موفقیت اضافه شد!")
                             conn.close()
                         except Exception as e:
                             st.error(f"خطا: {e}")
         else:
-            st.warning("موردی در پیشنهادات پیش‌فرض پیدا نشد. می‌توانید از طریق فرم سفارشی زیر عامل دلخواه خود را ثبت کنید.")
+            st.warning("موردی در پیشنهادات پیدا نشد. از فرم سفارشی زیر استفاده کنید.")
 
     st.markdown("---")
     st.write("### ✍️ ثبت سفارشی و دستی عامل جدید")
@@ -140,6 +138,7 @@ with tab2:
         with c1:
             custom_code = st.text_input("کد دقیق (Series Code)", placeholder="مثلا YAHOO:CL=F")
             custom_freq = st.selectbox("فرکانس", ["Daily", "Weekly", "Monthly", "Quarterly", "Annual"])
+            custom_source_id = st.number_input("شناسه منبع (Source ID)", min_value=1, value=1, step=1)
         with c2:
             custom_title = st.text_input("عنوان توضیحی (Title)", placeholder="مثلا Crude Oil Futures")
             custom_status = st.selectbox("وضعیت اولیه", ["ACTIVE", "INACTIVE"])
@@ -157,9 +156,9 @@ with tab2:
                         st.warning("⚠️ این کد پیش‌تر ثبت شده است.")
                     else:
                         cursor.execute("""
-                            INSERT INTO series_registry (series_code, title, frequency, status)
-                            VALUES (?, ?, ?, ?)
-                        """, (custom_code, custom_title, custom_freq, custom_status))
+                            INSERT INTO series_registry (series_code, title, frequency, status, source_id)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (custom_code, custom_title, custom_freq, custom_status, custom_source_id))
                         conn.commit()
                         st.success(f"✅ عامل سفارشی {custom_code} با موفقیت ثبت شد!")
                     conn.close()
@@ -200,7 +199,6 @@ with tab3:
                         
                         cursor.execute("DELETE FROM standardized_observation_inputs WHERE standardized_observation_id IN (SELECT id FROM standardized_observations WHERE series_id = ?)", (sid,))
                         cursor.execute("DELETE FROM standardized_observations WHERE series_id = ?", (sid,))
-                        cursor.execute("DELETE_RAW",) # (handled via standard sql below)
                         cursor.execute("DELETE FROM raw_observation_runs WHERE raw_observation_id IN (SELECT id FROM raw_observations WHERE series_id = ?)", (sid,))
                         cursor.execute("DELETE FROM raw_observations WHERE series_id = ?", (sid,))
                         cursor.execute("DELETE FROM collection_run_series WHERE series_id = ?", (sid,))
