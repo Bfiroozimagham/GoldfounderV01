@@ -1,16 +1,21 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import datetime
+import zipfile
+import os
 
-# تنظیمات صفحه وب
 st.set_page_config(page_title="Gold Data Pipeline", page_icon="🪙", layout="wide")
 
 st.title("🪙 سامانه خودکار جمع‌آوری و مدیریت داده‌های طلا")
 st.markdown("این سامانه آخرین اطلاعات بازار و متغیرهای کلان اقتصادی را مدیریت و نمایش می‌دهد.")
 
-# مسیر دیتابیس (چون فایل دیتابیس را کنار این کد آپلود می‌کنیم)
+ZIP_PATH = "economic_data.zip"
 DB_PATH = "economic_data.db"
+
+# باز کردن فایل زیپ در صورت عدم وجود دیتابیس
+if not os.path.exists(DB_PATH) and os.path.exists(ZIP_PATH):
+    with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
+        zip_ref.extractall(".")
 
 # تابع برای خواندن داده‌ها از دیتابیس
 @st.cache_data(ttl=60)
@@ -69,4 +74,4 @@ if not df.empty:
         series_df = df[df['series_code'] == selected_series]
         st.line_chart(series_df.set_index('observation_date')['value'])
 else:
-    st.warning("هنوز دیتابیسی یافت نشد یا داده‌ای وجود ندارد. لطفاً فایل دیتابیس را آپلود کنید.")
+    st.warning("⚠️ دیتابیس یافت نشد یا جدول‌ها خالی هستند. لطفاً مطمئن شوید فایل economic_data.zip با موفقیت در گیت‌هاب آپلود شده است.")
