@@ -17,8 +17,12 @@ if os.path.exists(ZIP_PATH) and not os.path.exists(DB_PATH):
     with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
         zip_ref.extractall(".")
 
-# ایجاد تب‌های مختلف برای ساختاردهی صفحه
-tab1, tab2 = st.tabs(["📊 داشبورد و نمودارها (Dashboard)", "⚙️ مدیریت متغیرها (Database Manager)"])
+# ایجاد ۳ تب برای داشبورد، افزودن متغیر و مدیریت/حذف
+tab1, tab2, tab3 = st.tabs([
+    "📊 داشبورد و نمودارها", 
+    "➕ افزودن متغیر جدید (عامل)", 
+    "⚙️ مدیریت و حذف متغیرها"
+])
 
 # ==========================================
 # تب اول: داشبورد نمایشی، جداول و دانلود اکسل
@@ -46,7 +50,6 @@ with tab1:
                 latest_data['observation_date'] = latest_data['observation_date'].dt.date
                 st.dataframe(latest_data, use_container_width=True)
 
-                # دکمه دانلود اکسل
                 @st.cache_data
                 def convert_df_to_excel(df_to_convert):
                     from io import BytesIO
@@ -77,9 +80,52 @@ with tab1:
         st.warning("⚠️ فایل دیتابیس یافت نشد.")
 
 # ==========================================
-# تب دوم: پنل مدیریت و حذف متغیرها
+# تب دوم: افزودن متغیر جدید (مشابه سلول 17)
 # ==========================================
 with tab2:
+    st.subheader("➕ ثبت متغیر (عامل) جدید در سامانه")
+    st.markdown("مشخصات متغیر جدید را وارد کنید تا به جدول `series_registry` اضافه شود.")
+    
+    with st.form("add_series_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_code = st.text_input("کد متغیر (Series Code)", placeholder="مثال: FRED:GDPC1 یا YAHOO:GC=F")
+            new_freq = st.selectbox("فرکانس داده (Frequency)", ["Daily", "Weekly", "Monthly", "Quarterly", "Annual"])
+        with col2:
+            new_title = st.text_input("عنوان توضیحی (Title)", placeholder="مثال: U.S. Real GDP یا Gold Spot Price")
+            new_status = st.selectbox("وضعیت (Status)", ["ACTIVE", "INACTIVE"])
+            
+        submitted = st.form_submit_button("💾 ثبت متغیر جدید")
+        
+        if submitted:
+            if not new_code or not new_title:
+                st.error("❌ لطفاً کد متغیر و عنوان را به طور کامل پر کنید.")
+            else:
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    
+                    # بررسی تکراری نبودن کد متغیر
+                    cursor.execute("SELECT id FROM series_registry WHERE series_code = ?", (new_code,))
+                    existing = cursor.fetchone()
+                    
+                    if existing:
+                        st.warning(f"⚠️ این کد متغیر پیشتر با شناسه [{existing[0]}] ثبت شده است.")
+                    else:
+                        cursor.execute("""
+                            INSERT INTO series_registry (series_code, title, frequency, status)
+                            VALUES (?, ?, ?, ?)
+                        """, (new_code, new_title, new_freq, new_status))
+                        conn.commit()
+                        st.success(f"✅ متغیر جدید با کد **{new_code}** با موفقیت به پایگاه داده اضافه شد!")
+                    conn.close()
+                except Exception as e:
+                    st.error(f"❌ خطا در ثبت متغیر: {e}")
+
+# ==========================================
+# تب سوم: پنل مدیریت و حذف متغیرها
+# ==========================================
+with tab3:
     st.subheader("⚙️ مدیریت متغیرهای پایگاه داده")
     st.markdown("در این بخش می‌توانید لیست متغیرهای موجود را مشاهده کرده و موارد دلخواه را به همراه تاریخچه‌های وابسته حذف کنید.")
     
@@ -91,7 +137,6 @@ with tab2:
         conn.close()
         
         if series_list:
-            # نمایش جدول متغیرها
             df_series = pd.DataFrame(series_list, columns=["ID", "Series Code", "Title"])
             st.dataframe(df_series, use_container_width=True)
             
@@ -109,7 +154,6 @@ with tab2:
                         cursor = conn.cursor()
                         sid = selected_id_to_delete
                         
-                        # پاکسازی ریشه‌ای (همانند منطقی که در کولب داشتیم)
                         cursor.execute("DELETE FROM standardized_observation_inputs WHERE standardized_observation_id IN (SELECT id FROM standardized_observations WHERE series_id = ?)", (sid,))
                         cursor.execute("DELETE FROM standardized_observations WHERE series_id = ?", (sid,))
                         cursor.execute("DELETE FROM raw_observation_runs WHERE raw_observation_id IN (SELECT id FROM raw_observations WHERE series_id = ?)", (sid,))
@@ -120,7 +164,7 @@ with tab2:
                         
                         conn.commit()
                         conn.close()
-                        st.success(f"✅ متغیر با شناسه [{sid}] با موفقیت و به‌طور کامل حذف شد. صفحه را رفرش کنید تا تغییرات اعمال شوند.")
+                        st.success(f"✅ متغیر با شناسه [{sid}] با موفقیت و به‌طور کامل حذف شد. صفحه را رفرش کنید.")
                     except Exception as e:
                         st.error(f"❌ خطا در عملیات حذف: {e}")
         else:
